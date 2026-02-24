@@ -177,6 +177,27 @@ app.get('/api/video/:id', async (req, res) => {
   }
 });
 
+// ── Helper: run yt-dlp directly via child_process ────────────────
+function runYtDlp(args) {
+  return new Promise((resolve, reject) => {
+    const { execFile } = require('child_process');
+    execFile(ytdlpPath, args, { maxBuffer: 1024 * 1024 * 10, timeout: 60000 }, (error, stdout, stderr) => {
+      if (error) {
+        // Extract the meaningful error from stderr
+        const errLines = (stderr || error.message || '').split('\n');
+        const errorLine = errLines.find(l => l.includes('ERROR:')) || errLines.join('\n');
+        reject(new Error(errorLine.trim()));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (e) {
+        reject(new Error('Failed to parse yt-dlp output'));
+      }
+    });
+  });
+}
+
 // ── Stream URL extraction with PO Token + fallback ───────────────
 app.get('/api/stream', async (req, res) => {
   try {
@@ -187,21 +208,6 @@ app.get('/api/stream', async (req, res) => {
 
     const videoUrl = `https://www.youtube.com/watch?v=${id}`;
     const hasCookies = fs.existsSync(cookiesPath);
-
-    // Build base options - PO Token plugin handles token generation automatically
-    // when bgutil-ytdlp-pot-provider is installed and the HTTP server is reachable
-    const baseOptions = {
-      dumpSingleJson: true,
-      noWarnings: true,
-      noCheckCertificates: true,
-      preferFreeFormats: true,
-      format: 'best[ext=mp4]/best',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      // Use Node.js for YouTube signature/challenge solving
-      jsRuntimes: 'node',
-      // Tell the PO Token plugin where the provider server is
-      extractorArgs: `youtubepot-bgutilhttp:base_url=${POT_PROVIDER_URL}`,
-    };
 
     // Strategies: try with cookies first, then without
     const strategies = [
@@ -215,13 +221,24 @@ app.get('/api/stream', async (req, res) => {
       try {
         console.log(`[stream] Trying strategy: ${strategy.name} for video ${id}`);
         
-        const options = { ...baseOptions };
+        // Build CLI args directly - same as the working command
+        const args = [
+          '--dump-single-json',
+          '--no-warnings',
+          '--no-check-certificates',
+          '--prefer-free-formats',
+          '--format', 'best[ext=mp4]/best',
+          '--js-runtimes', 'node',
+          '--extractor-args', `youtubepot-bgutilhttp:base_url=${POT_PROVIDER_URL}`,
+        ];
 
         if (strategy.useCookies) {
-          options.cookies = cookiesPath;
+          args.push('--cookies', cookiesPath);
         }
 
-        const output = await youtubedl(videoUrl, options);
+        args.push(videoUrl);
+
+        const output = await runYtDlp(args);
 
         console.log(`[stream] Success with strategy: ${strategy.name}`);
 

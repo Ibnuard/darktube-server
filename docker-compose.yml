@@ -16,7 +16,7 @@ services:
     environment:
       - POT_PROVIDER_URL=http://pot-provider:4416
     volumes:
-      - ./cookies.txt:/usr/src/app/cookies.txt:ro
+      - ./cookies.txt:/usr/src/app/cookies.txt
     depends_on:
       - pot-provider
     restart: always

@@ -7,6 +7,26 @@ Dokumentasi lengkap untuk endpoint API DarkTube Server.
 
 ---
 
+## 0. Server Status / Health Check
+Mengecek status server, versi, dan apakah cookies sudah terbaca.
+
+- **URL**: `/`
+- **Method**: `GET`
+- **Response Example**:
+  ```json
+  {
+    "name": "DarkTube Server",
+    "version": "1.1.0",
+    "status": "online",
+    "health": "ok",
+    "environment": "production",
+    "region": "ID",
+    "cookiesLoaded": true
+  }
+  ```
+
+---
+
 ## 1. Search Videos
 Mencari video berdasarkan kata kunci.
 

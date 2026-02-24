@@ -34,6 +34,7 @@ Jika Anda menemui error "Sign in to confirm you're not a bot" di VPS:
 5.  Restart Docker: `docker-compose restart api`.
 
 ### API Endpoints
+- `GET /`: Health check, server status, dan info versi.
 - `GET /api/search?q=query`: Mencari list video.
 - `GET /api/trending`: Mendapatkan video populer (Trending).
 - `GET /api/video/:id`: Mengambil metadata detail video.
@@ -71,6 +72,7 @@ If you encounter "Sign in to confirm you're not a bot" error on VPS:
 5.  Restart Docker: `docker-compose restart api`.
 
 ### API Endpoints
+- `GET /`: Health check, server status, and version info.
 - `GET /api/search?q=query`: Search for videos.
 - `GET /api/trending`: Get trending (popular) videos.
 - `GET /api/video/:id`: Get video detail metadata.

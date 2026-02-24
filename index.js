@@ -16,6 +16,19 @@ const youtube = google.youtube({
 app.use(cors());
 app.use(express.json());
 
+// Root endpoint for health check and info
+app.get('/', (req, res) => {
+  res.json({
+    name: 'DarkTube Server',
+    version: '1.1.0',
+    status: 'online',
+    health: 'ok',
+    environment: process.env.NODE_ENV || 'production',
+    region: process.env.YOUTUBE_REGION_CODE || 'ID',
+    cookiesLoaded: require('fs').existsSync(require('path').join(__dirname, 'cookies.txt'))
+  });
+});
+
 // Endpoint to search for videos
 app.get('/api/search', async (req, res) => {
   try {

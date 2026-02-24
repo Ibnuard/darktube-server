@@ -122,17 +122,25 @@ app.get('/api/stream', async (req, res) => {
 
     const videoUrl = `https://www.youtube.com/watch?v=${id}`;
     
-    // Using youtube-dl-exec to get format information
-    const output = await youtubedl(videoUrl, {
+    // Check if cookies.txt exists in the app directory
+    const fs = require('fs');
+    const path = require('path');
+    const cookiesPath = path.join(__dirname, 'cookies.txt');
+    const options = {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
       preferFreeFormats: true,
-      youtubeSkipDashManifest: true,
-      // Note: we might want specific formats for Switch compatibility
-      // For now, let's get the best combined format or a simple mp4
       format: 'best[ext=mp4]/best'
-    });
+    };
+
+    if (fs.existsSync(cookiesPath)) {
+      console.log('Using cookies.txt for stream extraction');
+      options.cookies = cookiesPath;
+    }
+
+    // Using youtube-dl-exec to get format information
+    const output = await youtubedl(videoUrl, options);
 
     res.json({
       title: output.title,

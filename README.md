@@ -25,6 +25,14 @@ Anda memerlukan **YouTube Data API Key**:
 2. **Local**: `npm install` lalu `node index.js`.
 3. **Docker (VPS)**: `docker-compose up -d --build`.
 
+### Penanganan Bot Detection (Cookies)
+Jika Anda menemui error "Sign in to confirm you're not a bot" di VPS:
+1.  Install ekstensi "Get cookies.txt LOCALLY" (Chrome/Firefox).
+2.  Buka YouTube dan login (jika perlu).
+3.  Ekspor cookies untuk YouTube dalam format Netscape.
+4.  Simpan sebagai `cookies.txt` di folder root project.
+5.  Restart Docker: `docker-compose restart api`.
+
 ### API Endpoints
 - `GET /api/search?q=query`: Mencari list video.
 - `GET /api/trending`: Mendapatkan video populer (Trending).
@@ -53,6 +61,14 @@ You will need a **YouTube Data API Key**:
 1. **Configuration**: Copy `.env.example` to `.env`. Fill in your `YOUTUBE_API_KEY` and `YOUTUBE_REGION_CODE` (e.g., `ID`, `US`, `JP`).
 2. **Local**: Run `npm install` followed by `node index.js`.
 3. **Docker (VPS)**: Run `docker-compose up -d --build`.
+
+### Handling Bot Detection (Cookies)
+If you encounter "Sign in to confirm you're not a bot" error on VPS:
+1.  Install "Get cookies.txt LOCALLY" extension (Chrome/Firefox).
+2.  Open YouTube and log in (if necessary).
+3.  Export cookies for YouTube in Netscape format.
+4.  Save as `cookies.txt` in the project root folder.
+5.  Restart Docker: `docker-compose restart api`.
 
 ### API Endpoints
 - `GET /api/search?q=query`: Search for videos.

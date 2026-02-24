@@ -196,6 +196,8 @@ app.get('/api/stream', async (req, res) => {
       preferFreeFormats: true,
       format: 'best[ext=mp4]/best',
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      // Use Node.js for YouTube signature/challenge solving
+      jsRuntimes: 'node',
       // Tell the PO Token plugin where the provider server is
       extractorArgs: `youtubepot-bgutilhttp:base_url=${POT_PROVIDER_URL}`,
     };

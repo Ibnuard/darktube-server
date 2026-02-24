@@ -5,7 +5,7 @@ echo "========================================="
 
 # Auto-update yt-dlp and PO Token plugin to latest version
 echo "[*] Updating yt-dlp and PO Token plugin..."
-pip3 install --no-cache-dir -U yt-dlp bgutil-ytdlp-pot-provider 2>&1 | tail -2
+pip3 install --no-cache-dir -U "yt-dlp[default]" bgutil-ytdlp-pot-provider 2>&1 | tail -2
 echo "[*] yt-dlp version: $(yt-dlp --version)"
 
 # Validate cookies file

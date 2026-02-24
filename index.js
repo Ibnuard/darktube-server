@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const { google } = require('googleapis');
-const youtubedl = require('youtube-dl-exec');
+const { create: createYtDlp } = require('youtube-dl-exec');
+const youtubedl = createYtDlp('/opt/venv/bin/yt-dlp'); // Use system yt-dlp installed via pip
 const cors = require('cors');
 
 const app = express();
@@ -145,7 +146,9 @@ app.get('/api/stream', async (req, res) => {
       noCheckCertificates: true,
       preferFreeFormats: true,
       noCacheDir: true,
-      format: 'best' // Relaxed format for better compatibility
+      format: 'best',
+      // Modern User-Agent to look more like a real browser
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     };
 
     if (fs.existsSync(cookiesPath)) {

@@ -119,22 +119,20 @@ Mengekstrak direct URL video untuk diputar di player media. Menggunakan PO Token
   {
     "title": "Video Title",
     "url": "https://rr5---sn-...",
-    "thumbnail": "...",
-    "duration": 212,
-    "strategy": "pot+cookies",
+    "thumbnail": "https://i.ytimg.com/...",
+    "duration": 197,
     "formats": [
       {
         "format_id": "18",
-        "ext": "mp4",
         "resolution": "640x360",
-        "url": "...",
-        "filesize": 12345678,
-        "vcodec": "avc1.42001E",
-        "acodec": "mp4a.40.2"
+        "quality": "360p",
+        "url": "https://..."
       }
     ]
   }
   ```
+  > **Note**: Only muxed MP4/H.264 formats (≤1080p) are returned. The top-level `url` is the best available muxed stream.
+
 
 - **Response Example (Error)**:
   ```json

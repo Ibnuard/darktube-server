@@ -242,21 +242,37 @@ app.get('/api/stream', async (req, res) => {
 
         console.log(`[stream] Success with strategy: ${strategy.name}`);
 
+        // Filter to Switch-compatible formats only:
+        // - Muxed (has both video + audio codecs)
+        // - MP4 container with H.264 video
+        // - Max 1080p resolution
+        const switchFormats = (output.formats || [])
+          .filter(f => {
+            if (!f.vcodec || f.vcodec === 'none') return false;
+            if (!f.acodec || f.acodec === 'none') return false;
+            if (f.ext !== 'mp4') return false;
+            if (!f.vcodec.startsWith('avc1')) return false;
+            // Parse height from resolution (e.g. "640x360" → 360)
+            const height = parseInt((f.resolution || '').split('x')[1]);
+            if (height && height > 1080) return false;
+            return true;
+          })
+          .map(f => {
+            const height = parseInt((f.resolution || '').split('x')[1]);
+            return {
+              format_id: f.format_id,
+              resolution: f.resolution,
+              quality: height ? `${height}p` : 'unknown',
+              url: f.url,
+            };
+          });
+
         return res.json({
           title: output.title,
           url: output.url,
           thumbnail: output.thumbnail,
           duration: output.duration,
-          strategy: strategy.name,
-          formats: (output.formats || []).map(f => ({
-            format_id: f.format_id,
-            ext: f.ext,
-            resolution: f.resolution,
-            url: f.url,
-            filesize: f.filesize,
-            vcodec: f.vcodec,
-            acodec: f.acodec
-          }))
+          formats: switchFormats
         });
       } catch (err) {
         console.warn(`[stream] Strategy ${strategy.name} failed: ${err.message?.substring(0, 200)}`);

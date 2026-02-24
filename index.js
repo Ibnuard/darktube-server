@@ -53,6 +53,44 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+// Endpoint to get trending videos
+app.get('/api/trending', async (req, res) => {
+  try {
+    const { maxResults = 10, pageToken, regionCode } = req.query;
+
+    if (!YOUTUBE_API_KEY) {
+      return res.status(500).json({ error: 'YouTube API Key is not configured' });
+    }
+
+    const response = await youtube.videos.list({
+      part: 'snippet,contentDetails,statistics',
+      chart: 'mostPopular',
+      regionCode: regionCode || process.env.YOUTUBE_REGION_CODE || 'ID',
+      maxResults: parseInt(maxResults),
+      pageToken: pageToken
+    });
+
+    const videos = response.data.items.map(item => ({
+      id: item.id,
+      title: item.snippet.title,
+      description: item.snippet.description,
+      thumbnails: item.snippet.thumbnails,
+      channelTitle: item.snippet.channelTitle,
+      publishedAt: item.snippet.publishedAt,
+      statistics: item.statistics
+    }));
+
+    res.json({
+      videos,
+      nextPageToken: response.data.nextPageToken,
+      prevPageToken: response.data.prevPageToken
+    });
+  } catch (error) {
+    console.error('Error fetching trending videos:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Endpoint to get video details (including stats if needed)
 app.get('/api/video/:id', async (req, res) => {
   try {

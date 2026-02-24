@@ -10,6 +10,7 @@
 
 ### Fitur Utama
 - **🎥 YouTube Search**: Pencari video menggunakan YouTube Data API v3.
+- **🔥 Trending Videos**: Mendapatkan daftar video populer berdasarkan wilayah.
 - **🔗 Stream Extraction**: Mendapatkan direct stream link (mp4/webm) menggunakan `yt-dlp` (via `youtube-dl-exec`).
 - **🚀 Deploy Ready**: Mendukung deployment langsung (Node.js) atau melalui Docker (rekomendasi VPS).
 
@@ -20,12 +21,15 @@ Anda memerlukan **YouTube Data API Key**:
 3. Buat **API Key** pada menu Credentials.
 
 ### Instalasi & Deployment
-1. **Konfigurasi**: Salin `.env.example` menjadi `.env` dan isi `YOUTUBE_API_KEY`.
+1. **Konfigurasi**: Salin `.env.example` menjadi `.env`. Isi `YOUTUBE_API_KEY` dan `YOUTUBE_REGION_CODE` (contoh: `ID`, `US`, `JP`).
 2. **Local**: `npm install` lalu `node index.js`.
 3. **Docker (VPS)**: `docker-compose up -d --build`.
 
-### Tujuan Project
-Layanan backend pendukung untuk aplikasi homebrew **DarkTube** (YouTube Player Alternative) pada console Nintendo Switch CFW.
+### API Endpoints
+- `GET /api/search?q=query`: Mencari list video.
+- `GET /api/trending`: Mendapatkan video populer (Trending).
+- `GET /api/video/:id`: Mengambil metadata detail video.
+- `GET /api/stream?id=video_id`: Mengambil direct link stream video untuk diputar di player.
 
 ---
 
@@ -35,6 +39,7 @@ Layanan backend pendukung untuk aplikasi homebrew **DarkTube** (YouTube Player A
 
 ### Key Features
 - **🎥 YouTube Search**: Search for videos using YouTube Data API v3.
+- **🔥 Trending Videos**: Get a list of popular videos by region.
 - **🔗 Stream Extraction**: Get direct stream links (mp4/webm) using `yt-dlp` (via `youtube-dl-exec`).
 - **🚀 Deploy Ready**: Supports direct deployment (Node.js) or via Docker (recommended for VPS).
 
@@ -45,9 +50,15 @@ You will need a **YouTube Data API Key**:
 3. Create an **API Key** under the Credentials menu.
 
 ### Installation & Deployment
-1. **Configuration**: Copy `.env.example` to `.env` and fill in your `YOUTUBE_API_KEY`.
+1. **Configuration**: Copy `.env.example` to `.env`. Fill in your `YOUTUBE_API_KEY` and `YOUTUBE_REGION_CODE` (e.g., `ID`, `US`, `JP`).
 2. **Local**: Run `npm install` followed by `node index.js`.
 3. **Docker (VPS)**: Run `docker-compose up -d --build`.
+
+### API Endpoints
+- `GET /api/search?q=query`: Search for videos.
+- `GET /api/trending`: Get trending (popular) videos.
+- `GET /api/video/:id`: Get video detail metadata.
+- `GET /api/stream?id=video_id`: Get direct stream links for playback.
 
 ### Project Purpose
 Backend support service for the **DarkTube** homebrew application (Alternative YouTube Player) on Nintendo Switch CFW consoles.

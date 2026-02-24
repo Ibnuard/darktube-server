@@ -8,5 +8,5 @@ services:
     env_file:
       - .env
     volumes:
-      - ./cookies.txt:/usr/src/app/cookies.txt:ro
+      - ./cookies.txt:/usr/src/app/cookies.txt
     restart: always

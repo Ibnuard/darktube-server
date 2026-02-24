@@ -144,7 +144,8 @@ app.get('/api/stream', async (req, res) => {
       noWarnings: true,
       noCheckCertificates: true,
       preferFreeFormats: true,
-      format: 'best[ext=mp4]/best'
+      noCacheDir: true,
+      format: 'best' // Relaxed format for better compatibility
     };
 
     if (fs.existsSync(cookiesPath)) {

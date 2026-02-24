@@ -2,8 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const { google } = require('googleapis');
 const { create: createYtDlp } = require('youtube-dl-exec');
-const youtubedl = createYtDlp('/opt/venv/bin/yt-dlp'); // Use system yt-dlp installed via pip
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const cors = require('cors');
+
+const ytdlpPath = '/opt/venv/bin/yt-dlp';
+const youtubedl = createYtDlp(ytdlpPath);
+const cookiesPath = path.join(__dirname, 'cookies.txt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,20 +23,52 @@ const youtube = google.youtube({
 app.use(cors());
 app.use(express.json());
 
-// Root endpoint for health check and info
+// ── Helper: get yt-dlp version ───────────────────────────────────
+function getYtDlpVersion() {
+  try {
+    return execSync(`${ytdlpPath} --version`, { encoding: 'utf-8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+// ── Helper: validate cookies ─────────────────────────────────────
+function getCookieStatus() {
+  if (!fs.existsSync(cookiesPath)) {
+    return { loaded: false, reason: 'File not found' };
+  }
+  const content = fs.readFileSync(cookiesPath, 'utf-8');
+  const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+  if (lines.length === 0) {
+    return { loaded: false, reason: 'File is empty or only has comments', size: content.length };
+  }
+  // Check if it contains YouTube domain cookies
+  const hasYtCookies = content.includes('.youtube.com') || content.includes('.google.com');
+  return {
+    loaded: true,
+    valid: hasYtCookies,
+    entries: lines.length,
+    size: content.length,
+    reason: hasYtCookies ? 'OK' : 'No YouTube/Google cookies found'
+  };
+}
+
+// ── Root endpoint ─ health check ─────────────────────────────────
 app.get('/', (req, res) => {
+  const cookieStatus = getCookieStatus();
   res.json({
     name: 'DarkTube Server',
-    version: '1.1.0',
+    version: '1.2.0',
     status: 'online',
     health: 'ok',
     environment: process.env.NODE_ENV || 'production',
     region: process.env.YOUTUBE_REGION_CODE || 'ID',
-    cookiesLoaded: require('fs').existsSync(require('path').join(__dirname, 'cookies.txt'))
+    ytdlpVersion: getYtDlpVersion(),
+    cookies: cookieStatus
   });
 });
 
-// Endpoint to search for videos
+// ── Search videos ────────────────────────────────────────────────
 app.get('/api/search', async (req, res) => {
   try {
     const { q, maxResults = 10, pageToken } = req.query;
@@ -67,7 +105,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Endpoint to get trending videos
+// ── Trending videos ──────────────────────────────────────────────
 app.get('/api/trending', async (req, res) => {
   try {
     const { maxResults = 10, pageToken, regionCode } = req.query;
@@ -105,7 +143,7 @@ app.get('/api/trending', async (req, res) => {
   }
 });
 
-// Endpoint to get video details (including stats if needed)
+// ── Video details ────────────────────────────────────────────────
 app.get('/api/video/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -126,7 +164,7 @@ app.get('/api/video/:id', async (req, res) => {
   }
 });
 
-// Endpoint to get stream URL via youtube-dl-exec
+// ── Stream URL extraction with fallback ──────────────────────────
 app.get('/api/stream', async (req, res) => {
   try {
     const { id } = req.query;
@@ -135,41 +173,80 @@ app.get('/api/stream', async (req, res) => {
     }
 
     const videoUrl = `https://www.youtube.com/watch?v=${id}`;
-    
-    // Check if cookies.txt exists in the app directory
-    const fs = require('fs');
-    const path = require('path');
-    const cookiesPath = path.join(__dirname, 'cookies.txt');
-    const options = {
-      dumpSingleJson: true,
-      noWarnings: true,
-      noCheckCertificates: true,
-      preferFreeFormats: true,
-      noCacheDir: true,
-      format: 'best',
-      // Modern User-Agent to look more like a real browser
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-    };
+    const hasCookies = fs.existsSync(cookiesPath);
 
-    if (fs.existsSync(cookiesPath)) {
-      console.log('Using cookies.txt for stream extraction');
-      options.cookies = cookiesPath;
+    // Strategies to try in order - different player clients bypass different restrictions
+    const strategies = [
+      { name: 'ios+cookies', client: 'ios', useCookies: hasCookies },
+      { name: 'android+cookies', client: 'android', useCookies: hasCookies },
+      { name: 'mweb+cookies', client: 'mweb', useCookies: hasCookies },
+      { name: 'web+cookies', client: 'web', useCookies: hasCookies },
+      { name: 'ios_no_cookies', client: 'ios', useCookies: false },
+      { name: 'android_no_cookies', client: 'android', useCookies: false },
+    ];
+
+    let lastError = null;
+
+    for (const strategy of strategies) {
+      try {
+        console.log(`[stream] Trying strategy: ${strategy.name} for video ${id}`);
+        
+        const options = {
+          dumpSingleJson: true,
+          noWarnings: true,
+          noCheckCertificates: true,
+          preferFreeFormats: true,
+          noCacheDir: true,
+          format: 'best[ext=mp4]/best',
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          extractorArgs: `youtube:player_client=${strategy.client}`,
+        };
+
+        if (strategy.useCookies) {
+          options.cookies = cookiesPath;
+        }
+
+        const output = await youtubedl(videoUrl, options);
+
+        console.log(`[stream] Success with strategy: ${strategy.name}`);
+
+        return res.json({
+          title: output.title,
+          url: output.url,
+          thumbnail: output.thumbnail,
+          duration: output.duration,
+          strategy: strategy.name,
+          formats: (output.formats || []).map(f => ({
+            format_id: f.format_id,
+            ext: f.ext,
+            resolution: f.resolution,
+            url: f.url,
+            filesize: f.filesize,
+            vcodec: f.vcodec,
+            acodec: f.acodec
+          }))
+        });
+      } catch (err) {
+        console.warn(`[stream] Strategy ${strategy.name} failed: ${err.message?.substring(0, 150)}`);
+        lastError = err;
+        continue;
+      }
     }
 
-    // Using youtube-dl-exec to get format information
-    const output = await youtubedl(videoUrl, options);
-
-    res.json({
-      title: output.title,
-      url: output.url, // This is the direct stream URL
-      thumbnail: output.thumbnail,
-      duration: output.duration,
-      formats: output.formats.map(f => ({
-        format_id: f.format_id,
-        ext: f.ext,
-        resolution: f.resolution,
-        url: f.url
-      }))
+    // All strategies failed
+    const cookieStatus = getCookieStatus();
+    const ytdlpVersion = getYtDlpVersion();
+    
+    res.status(500).json({
+      error: 'All extraction strategies failed',
+      lastError: lastError?.message || 'Unknown error',
+      diagnostics: {
+        ytdlpVersion,
+        cookies: cookieStatus,
+        hint: cookieStatus.loaded
+          ? 'Cookies might be expired. Re-export from browser and restart container.'
+          : 'No cookies.txt found. Export cookies from logged-in YouTube session.'
+      }
     });
   } catch (error) {
     console.error('Error getting stream URL:', error);
@@ -177,6 +254,33 @@ app.get('/api/stream', async (req, res) => {
   }
 });
 
+// ── Admin: update yt-dlp ─────────────────────────────────────────
+app.post('/api/admin/update-ytdlp', async (req, res) => {
+  try {
+    const before = getYtDlpVersion();
+    const output = execSync('pip3 install --no-cache-dir -U yt-dlp 2>&1', { encoding: 'utf-8' });
+    const after = getYtDlpVersion();
+
+    res.json({
+      success: true,
+      versionBefore: before,
+      versionAfter: after,
+      updated: before !== after,
+      output: output.split('\n').slice(-3).join('\n').trim()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Admin: check cookies status ──────────────────────────────────
+app.get('/api/admin/cookies', (req, res) => {
+  res.json(getCookieStatus());
+});
+
 app.listen(PORT, () => {
-  console.log(`YouTube Wrapper API running on http://localhost:${PORT}`);
+  console.log(`DarkTube Server v1.2.0 running on http://localhost:${PORT}`);
+  console.log(`yt-dlp version: ${getYtDlpVersion()}`);
+  const cs = getCookieStatus();
+  console.log(`Cookies: ${cs.loaded ? `loaded (${cs.entries} entries, ${cs.reason})` : cs.reason}`);
 });

@@ -1,12 +1,22 @@
 version: '3.8'
 
 services:
+  # PO Token provider - generates Proof of Origin tokens to bypass YouTube bot detection
+  pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    init: true
+    restart: always
+
   api:
     build: .
     ports:
       - "${PORT:-3000}:3000"
     env_file:
       - .env
+    environment:
+      - POT_PROVIDER_URL=http://pot-provider:4416
     volumes:
       - ./cookies.txt:/usr/src/app/cookies.txt:ro
+    depends_on:
+      - pot-provider
     restart: always

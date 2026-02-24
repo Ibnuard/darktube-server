@@ -10,6 +10,7 @@ const cors = require('cors');
 const ytdlpPath = '/opt/venv/bin/yt-dlp';
 const youtubedl = createYtDlp(ytdlpPath);
 const cookiesPath = path.join(__dirname, 'cookies.txt');
+const POT_PROVIDER_URL = process.env.POT_PROVIDER_URL || 'http://pot-provider:4416';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,7 +43,6 @@ function getCookieStatus() {
   if (lines.length === 0) {
     return { loaded: false, reason: 'File is empty or only has comments', size: content.length };
   }
-  // Check if it contains YouTube domain cookies
   const hasYtCookies = content.includes('.youtube.com') || content.includes('.google.com');
   return {
     loaded: true,
@@ -53,18 +53,30 @@ function getCookieStatus() {
   };
 }
 
+// ── Helper: check PO Token provider ──────────────────────────────
+async function checkPotProvider() {
+  try {
+    const resp = await fetch(POT_PROVIDER_URL, { signal: AbortSignal.timeout(3000) });
+    return { available: resp.ok, url: POT_PROVIDER_URL };
+  } catch {
+    return { available: false, url: POT_PROVIDER_URL };
+  }
+}
+
 // ── Root endpoint ─ health check ─────────────────────────────────
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   const cookieStatus = getCookieStatus();
+  const potStatus = await checkPotProvider();
   res.json({
     name: 'DarkTube Server',
-    version: '1.2.0',
+    version: '1.3.0',
     status: 'online',
     health: 'ok',
     environment: process.env.NODE_ENV || 'production',
     region: process.env.YOUTUBE_REGION_CODE || 'ID',
     ytdlpVersion: getYtDlpVersion(),
-    cookies: cookieStatus
+    cookies: cookieStatus,
+    potProvider: potStatus
   });
 });
 
@@ -164,7 +176,7 @@ app.get('/api/video/:id', async (req, res) => {
   }
 });
 
-// ── Stream URL extraction with fallback ──────────────────────────
+// ── Stream URL extraction with PO Token + fallback ───────────────
 app.get('/api/stream', async (req, res) => {
   try {
     const { id } = req.query;
@@ -175,14 +187,23 @@ app.get('/api/stream', async (req, res) => {
     const videoUrl = `https://www.youtube.com/watch?v=${id}`;
     const hasCookies = fs.existsSync(cookiesPath);
 
-    // Strategies to try in order - different player clients bypass different restrictions
+    // Build base options - PO Token plugin handles token generation automatically
+    // when bgutil-ytdlp-pot-provider is installed and the HTTP server is reachable
+    const baseOptions = {
+      dumpSingleJson: true,
+      noWarnings: true,
+      noCheckCertificates: true,
+      preferFreeFormats: true,
+      format: 'best[ext=mp4]/best',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      // Tell the PO Token plugin where the provider server is
+      extractorArgs: `youtubepot-bgutilhttp:base_url=${POT_PROVIDER_URL}`,
+    };
+
+    // Strategies: try with cookies first, then without
     const strategies = [
-      { name: 'ios+cookies', client: 'ios', useCookies: hasCookies },
-      { name: 'android+cookies', client: 'android', useCookies: hasCookies },
-      { name: 'mweb+cookies', client: 'mweb', useCookies: hasCookies },
-      { name: 'web+cookies', client: 'web', useCookies: hasCookies },
-      { name: 'ios_no_cookies', client: 'ios', useCookies: false },
-      { name: 'android_no_cookies', client: 'android', useCookies: false },
+      { name: 'pot+cookies', useCookies: hasCookies },
+      { name: 'pot_only', useCookies: false },
     ];
 
     let lastError = null;
@@ -191,16 +212,7 @@ app.get('/api/stream', async (req, res) => {
       try {
         console.log(`[stream] Trying strategy: ${strategy.name} for video ${id}`);
         
-        const options = {
-          dumpSingleJson: true,
-          noWarnings: true,
-          noCheckCertificates: true,
-          preferFreeFormats: true,
-          noCacheDir: true,
-          format: 'best[ext=mp4]/best',
-          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          extractorArgs: `youtube:player_client=${strategy.client}`,
-        };
+        const options = { ...baseOptions };
 
         if (strategy.useCookies) {
           options.cookies = cookiesPath;
@@ -227,7 +239,7 @@ app.get('/api/stream', async (req, res) => {
           }))
         });
       } catch (err) {
-        console.warn(`[stream] Strategy ${strategy.name} failed: ${err.message?.substring(0, 150)}`);
+        console.warn(`[stream] Strategy ${strategy.name} failed: ${err.message?.substring(0, 200)}`);
         lastError = err;
         continue;
       }
@@ -235,17 +247,22 @@ app.get('/api/stream', async (req, res) => {
 
     // All strategies failed
     const cookieStatus = getCookieStatus();
-    const ytdlpVersion = getYtDlpVersion();
+    const potStatus = await checkPotProvider();
     
     res.status(500).json({
       error: 'All extraction strategies failed',
       lastError: lastError?.message || 'Unknown error',
       diagnostics: {
-        ytdlpVersion,
+        ytdlpVersion: getYtDlpVersion(),
         cookies: cookieStatus,
-        hint: cookieStatus.loaded
-          ? 'Cookies might be expired. Re-export from browser and restart container.'
-          : 'No cookies.txt found. Export cookies from logged-in YouTube session.'
+        potProvider: potStatus,
+        hints: [
+          !potStatus.available ? 'PO Token provider is NOT reachable - check if pot-provider container is running' : null,
+          !cookieStatus.loaded ? 'No cookies.txt found - export from logged-in YouTube session' : null,
+          cookieStatus.loaded && !cookieStatus.valid ? 'cookies.txt does not contain YouTube cookies' : null,
+          'Try re-exporting cookies from an incognito window (see yt-dlp wiki)',
+          'Run: docker-compose restart to reload everything',
+        ].filter(Boolean)
       }
     });
   } catch (error) {
@@ -258,7 +275,7 @@ app.get('/api/stream', async (req, res) => {
 app.post('/api/admin/update-ytdlp', async (req, res) => {
   try {
     const before = getYtDlpVersion();
-    const output = execSync('pip3 install --no-cache-dir -U yt-dlp 2>&1', { encoding: 'utf-8' });
+    const output = execSync('pip3 install --no-cache-dir -U yt-dlp bgutil-ytdlp-pot-provider 2>&1', { encoding: 'utf-8' });
     const after = getYtDlpVersion();
 
     res.json({
@@ -279,8 +296,9 @@ app.get('/api/admin/cookies', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`DarkTube Server v1.2.0 running on http://localhost:${PORT}`);
+  console.log(`DarkTube Server v1.3.0 running on http://localhost:${PORT}`);
   console.log(`yt-dlp version: ${getYtDlpVersion()}`);
+  console.log(`PO Token provider: ${POT_PROVIDER_URL}`);
   const cs = getCookieStatus();
   console.log(`Cookies: ${cs.loaded ? `loaded (${cs.entries} entries, ${cs.reason})` : cs.reason}`);
 });

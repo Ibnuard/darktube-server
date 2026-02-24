@@ -56,8 +56,9 @@ function getCookieStatus() {
 // ── Helper: check PO Token provider ──────────────────────────────
 async function checkPotProvider() {
   try {
-    const resp = await fetch(POT_PROVIDER_URL, { signal: AbortSignal.timeout(3000) });
-    return { available: resp.ok, url: POT_PROVIDER_URL };
+    // pot-provider returns 404 on GET / but that still means it's reachable and running
+    await fetch(POT_PROVIDER_URL, { signal: AbortSignal.timeout(3000) });
+    return { available: true, url: POT_PROVIDER_URL };
   } catch {
     return { available: false, url: POT_PROVIDER_URL };
   }

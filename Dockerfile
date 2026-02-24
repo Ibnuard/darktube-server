@@ -29,6 +29,9 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
+# Install yt-dlp global config (ensures --js-runtimes node is always used)
+COPY yt-dlp.conf /etc/yt-dlp.conf
+
 # Make startup script executable
 RUN chmod +x start.sh
 

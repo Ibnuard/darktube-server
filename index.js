@@ -265,37 +265,80 @@ app.get("/api/stream", async (req, res) => {
 
         console.log(`[stream] Success with strategy: ${strategy.name}`);
 
-        // Filter to Switch-compatible formats only:
-        // - Muxed (has both video + audio codecs)
-        // - MP4 container with H.264 video
-        // - Max 1080p resolution
-        const switchFormats = (output.formats || [])
-          .filter((f) => {
-            if (!f.vcodec || f.vcodec === "none") return false;
-            if (!f.acodec || f.acodec === "none") return false;
-            if (f.ext !== "mp4") return false;
-            if (!f.vcodec.startsWith("avc1")) return false;
-            // Parse height from resolution (e.g. "640x360" → 360)
-            const height = parseInt((f.resolution || "").split("x")[1]);
-            if (height && height > 1080) return false;
-            return true;
-          })
-          .map((f) => {
-            const height = parseInt((f.resolution || "").split("x")[1]);
-            return {
+        // Group formats into categories compatible with Nintendo Switch
+        // - Muxed (Video + Audio combined): Usually max 720p, avc1/mp4
+        // - Video Only: Up to 1080p, avc1/mp4
+        // - Audio Only: mp4a/m4a
+        const muxed = [];
+        const videoOnly = [];
+        const audioOnly = [];
+
+        (output.formats || []).forEach((f) => {
+          const hasVideo = f.vcodec && f.vcodec !== "none";
+          const hasAudio = f.acodec && f.acodec !== "none";
+          const isH264 = hasVideo ? f.vcodec.startsWith("avc1") : false;
+          const isAAC = hasAudio
+            ? f.acodec.startsWith("mp4a") || f.ext === "m4a"
+            : false;
+
+          const height = hasVideo
+            ? parseInt((f.resolution || "").split("x")[1])
+            : null;
+          const proxyUrl = `/api/proxy?url=${encodeURIComponent(f.url)}`;
+
+          // Switch limits: H.264 up to 1080p
+          if (
+            hasVideo &&
+            (!isH264 || f.ext !== "mp4" || (height && height > 1080))
+          ) {
+            return;
+          }
+
+          if (hasVideo && hasAudio) {
+            muxed.push({
               format_id: f.format_id,
               resolution: f.resolution,
               quality: height ? `${height}p` : "unknown",
               url: f.url,
-            };
-          });
+              proxyUrl: proxyUrl,
+              fps: f.fps,
+            });
+          } else if (hasVideo && !hasAudio) {
+            videoOnly.push({
+              format_id: f.format_id,
+              resolution: f.resolution,
+              quality: height ? `${height}p` : "unknown",
+              url: f.url,
+              proxyUrl: proxyUrl,
+              fps: f.fps,
+            });
+          } else if (!hasVideo && hasAudio) {
+            if (f.ext === "m4a" || isAAC) {
+              audioOnly.push({
+                format_id: f.format_id,
+                bitrate: f.abr ? `${Math.round(f.abr)}k` : "unknown",
+                url: f.url,
+                proxyUrl: proxyUrl,
+              });
+            }
+          }
+        });
+
+        // Sort by quality ascending
+        muxed.sort((a, b) => parseInt(b.quality) - parseInt(a.quality));
+        videoOnly.sort((a, b) => parseInt(b.quality) - parseInt(a.quality));
+        audioOnly.sort((a, b) => parseInt(b.bitrate) - parseInt(a.bitrate));
 
         return res.json({
           title: output.title,
           url: output.url,
           thumbnail: output.thumbnail,
           duration: output.duration,
-          formats: switchFormats,
+          formats: {
+            muxed,
+            videoOnly,
+            audioOnly,
+          },
         });
       } catch (err) {
         console.warn(
